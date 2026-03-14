@@ -112,7 +112,7 @@ const Index = () => {
   const [showExpectationsForm, setShowExpectationsForm] = useState(false);
   const [expectations, setExpectations] = useState("");
   const [formSubmitted, setFormSubmitted] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false); // Start as false, will be updated when player starts
   // Progress tracking
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -122,10 +122,11 @@ const Index = () => {
   const playerRef = useRef<any>(null);
   const playerReadyRef = useRef(false);
   const userInteractedRef = useRef(false);
+  const playOnReadyRef = useRef(false); // Flag to auto-play after ready if interaction already happened
 
-  // Helper to open default mail client
+  // Helper to open default mail client with recipient
   const openMailTo = (subject: string, body: string) => {
-    const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    const mailtoLink = `mailto:raphaelsarota@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     window.location.href = mailtoLink;
   };
 
@@ -168,7 +169,7 @@ const Index = () => {
     e.preventDefault();
     if (!expectations.trim() || !result) return;
 
-    // Send ONE email with both the result and expectations
+    // Send ONE email with both the result and expectations to the fixed recipient
     const subject = "My Answer and Expectations for You";
     const answerText = result === "yes" ? "YES 🎉" : "Not really 😏";
     const body = `My answer: ${answerText}\n\nMy expectations for you:\n${expectations}`;
@@ -185,25 +186,27 @@ const Index = () => {
       } else {
         playerRef.current.playVideo();
       }
-      setIsPlaying(!isPlaying);
+      // isPlaying will be updated by onStateChange event
     }
   };
 
   // Load YouTube IFrame API and create hidden player
   useEffect(() => {
+    // Load the IFrame Player API script
     const tag = document.createElement('script');
     tag.src = 'https://www.youtube.com/iframe_api';
     const firstScriptTag = document.getElementsByTagName('script')[0];
     firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
 
+    // Define callback when API is ready
     window.onYouTubeIframeAPIReady = () => {
       playerRef.current = new window.YT.Player('youtube-audio-player', {
         height: '0',
         width: '0',
         videoId: '2zfTPxaX5ss', // Faouzia - Hero
         playerVars: {
-          autoplay: 1,
-          mute: 1,
+          autoplay: 1,          // Try to autoplay (will be muted initially)
+          mute: 1,               // Start muted to satisfy browser autoplay policies
           start: 20,
           controls: 0,
           disablekb: 1,
@@ -219,12 +222,22 @@ const Index = () => {
             playerReadyRef.current = true;
             event.target.setVolume(50);
             setDuration(event.target.getDuration());
-            setIsPlaying(true);
+            // If user already interacted, unmute and play
+            if (userInteractedRef.current) {
+              event.target.unMute();
+              event.target.playVideo();
+            } else {
+              // Otherwise it's already playing muted, we'll unmute on first interaction
+              // Ensure it's playing muted
+              event.target.playVideo();
+            }
           },
           onStateChange: (event: any) => {
             if (event.data === window.YT.PlayerState.PLAYING) {
               setIsPlaying(true);
             } else if (event.data === window.YT.PlayerState.PAUSED) {
+              setIsPlaying(false);
+            } else if (event.data === window.YT.PlayerState.ENDED) {
               setIsPlaying(false);
             }
           },
@@ -232,6 +245,7 @@ const Index = () => {
       });
     };
 
+    // Cleanup
     return () => {
       window.onYouTubeIframeAPIReady = null;
       if (playerRef.current && playerRef.current.destroy) {
@@ -240,12 +254,15 @@ const Index = () => {
     };
   }, []);
 
-  // Unmute on first user interaction
+  // Unmute and play on first user interaction
   useEffect(() => {
     const handleFirstInteraction = () => {
-      if (!userInteractedRef.current && playerRef.current && playerReadyRef.current) {
-        playerRef.current.unMute();
+      if (!userInteractedRef.current) {
         userInteractedRef.current = true;
+        if (playerRef.current && playerReadyRef.current) {
+          playerRef.current.unMute();
+          playerRef.current.playVideo(); // Ensure it's playing
+        }
       }
     };
 
@@ -301,6 +318,7 @@ const Index = () => {
 
   // Format time as mm:ss
   const formatTime = (seconds: number) => {
+    if (isNaN(seconds)) return "0:00";
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
@@ -316,7 +334,7 @@ const Index = () => {
       <div id="youtube-audio-player" style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }} />
 
       {/* Spinning Compact Disc with Progress Ring */}
-      <div className="fixed hidden bottom-4 left-4 z-50 flex flex-col items-center">
+      <div className="fixed bottom-4 left-4 z-50 flex flex-col items-center">
         {/* Container for disc and ring */}
         <div className="relative w-16 h-16">
           {/* Progress ring background (grey) */}
@@ -340,7 +358,7 @@ const Index = () => {
               strokeWidth="4"
               strokeLinecap="round"
               strokeDasharray="289.03" // 2 * pi * 46 ≈ 289.03
-              strokeDashoffset={289.03 * (1 - progress / 100)}
+              strokeDashoffset={289.03 * (1 - (progress || 0) / 100)}
               style={{ transition: 'stroke-dashoffset 0.2s' }}
               transform="rotate(-90 50 50)" // Start from top
             />
@@ -481,7 +499,7 @@ const Index = () => {
                 </h2>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center flex-wrap">
                   <button onClick={() => handleResult("yes")} className="glow-button text-base">Yes 🥺❤️</button>
-                  <button onClick={() => handleResult("convince")} className="option-button">Not Really 😌</button>
+                  <button onClick={() => handleResult("No really")} className="option-button">Not Really 😌</button>
                 </div>
               </div>
             )}
@@ -504,9 +522,9 @@ const Index = () => {
                 </p>
               </>
             )}
-            {result === "convince" && (
+            {result === "No really" && (
               <>
-                <div className="text-7xl md:text-9xl">😏</div>
+                <div className="text-7xl md:text-9xl">😀</div>
                 <h2 className="text-3xl md:text-5xl font-display font-light text-foreground tracking-wide leading-tight">
                   Decision  <span className="italic text-gradient-gold">respected</span>
                 </h2>
