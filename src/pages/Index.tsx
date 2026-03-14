@@ -316,7 +316,7 @@ const Index = () => {
       <div id="youtube-audio-player" style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }} />
 
       {/* Spinning Compact Disc with Progress Ring */}
-      <div className="fixed bottom-4 left-4 z-50 flex flex-col items-center">
+      <div className="fixed hidden bottom-4 left-4 z-50 flex flex-col items-center">
         {/* Container for disc and ring */}
         <div className="relative w-16 h-16">
           {/* Progress ring background (grey) */}
