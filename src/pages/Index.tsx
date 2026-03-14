@@ -11,8 +11,10 @@ import type { Container, Engine } from "tsparticles-engine";
 type Section = "landing" | "letters" | "promises" | "final" | "result";
 type Result = "yes" | "No really" | null;
 
-const poem = `Sikumbuki vile tulianza kuongea,
-but meeting you felt like fate.
+const poem = `
+Tuzae watoto wangapi asweeto,
+Ni mimi pekee naeza ongea kichinku huko kwetu,
+
 
 You're the most beautiful soul
 I think I’ve ever known.
@@ -50,12 +52,11 @@ my love.
 
 const loveLetters = [
   {
-    label: "Maybe It's My Fault",
+    label: "Ama nijaribu na kifrench ?",
     message: `Sagina,
 
-Maybe I should blame myself.
-
-Every day I tell myself not to fall too easily for someone, but somehow it still happens. And this time… it happened with you.
+Peut-être que je devrais m’en vouloir.
+Chaque jour, je me dis de ne pas tomber amoureux trop facilement de quelqu’un, mais d’une façon ou d’une autre, ça arrive quand même. Et cette fois… c’est arrivé avec toi.
 
 I like your eyes, the way they look when you're listening. I like your personality, the way you naturally make people feel comfortable around you.
 
@@ -64,35 +65,44 @@ You're just a really good person to be around.
 We've been hanging out for some time now, talking, sharing random moments… and somewhere along the way my feelings quietly grew.`,
   },
   {
-    label: "What Happened To Me",
-    message: `Sagina,
+  label: "Mmh",
+  message: `Sagina,
 
-I didn't expect it to happen this way.
+Utanipenda ama utanidanganya?🥹
+Unafanya silali binti,
 
-At first it was just enjoying your company. Then it became looking forward to seeing you. Then it became thinking about you even when you're not around.
+I didn't wake up one morning deciding I would fall for you. 
+I'll be your umbrella when you see rain. 
 
-Maybe it's my problem for falling too fast.
+At first it was just liking your presence.  
+Then it became noticing the small things about you.  
+Then somehow my mind started circling back to you when I wasn't even trying.
 
-But the truth is, when I'm around you things feel lighter, calmer… like the world slows down for a moment.
+Now here I am admitting something I didn't expect.
+My feelings for you didn't ask for permission.
 
-And lately I can't even concentrate on much, because my mind somehow finds its way back to you.`,
-  },
-  {
-    label: "Just Me Being Honest",
-    message: `Sagina,
+And honestly… I wouldn't stop them even if I could.`
+},
+{
+  label: "Will you be my wife ?",
+  message: `Sagina,
 
-Maybe I'm just emotional right now.
+I'll always be at your service Princess,
+Just say the word and I'll cool the sun for you,
 
-Maybe I'm overthinking everything. Maybe I'm the one who let my heart run ahead of logic.
+No prison can hold the way I feel about you.
+It is 1:38 am nikitype hizi,
 
-But I didn't want to hide it anymore.
+I trust you with my heart in a way that feels reckless and calm at the same time.
 
-You're someone special to me... not just because of how you look, but because of who you are.
+Like jumping from a plane  
+and somehow knowing the parachute will open.
 
-I just wanted you to know the truth from my heart.
+That's what you feel like to me.
+I'll give you my love till the day I die,
 
-I fell for you.`,
-  },
+Risk… and safety… at the same time.`
+},
 ];
 
 const promises = [
@@ -690,7 +700,7 @@ const Index = () => {
                         ["clean"],
                       ],
                     }}
-                    className="bg-white/5 text-white rounded-lg [&_.ql-toolbar]:bg-white/10 [&_.ql-toolbar]:border-white/20 [&_.ql-container]:border-white/20 [&_.ql-editor]:text-white [&_.ql-editor]:min-h-[120px]"
+                    className="bg-white text-black rounded-lg [&_.ql-toolbar]:bg-white/10 [&_.ql-toolbar]:border-white/20 [&_.ql-container]:border-white/20 [&_.ql-editor]:text-w [&_.ql-editor]:min-h-[120px]"
                   />
                   {submitError && <p className="text-rose-400 text-sm">{submitError}</p>}
                   <button
