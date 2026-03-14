@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import confetti from "canvas-confetti";
-import FloatingHearts from "@/components/FloatingHearts";
 import TypewriterText from "@/components/TypewriterText";
 import LoveLetter from "@/components/LoveLetter";
+import ReactQuill from "react-quill";
+import "react-quill/dist/quill.snow.css";
+import Particles from "react-tsparticles";
+import { loadSlim } from "tsparticles-slim";
+import type { Container, Engine } from "tsparticles-engine";
 
 type Section = "landing" | "letters" | "promises" | "final" | "result";
 type Result = "yes" | "No really" | null;
@@ -112,23 +116,25 @@ const Index = () => {
   const [showExpectationsForm, setShowExpectationsForm] = useState(false);
   const [expectations, setExpectations] = useState("");
   const [formSubmitted, setFormSubmitted] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false); // Start as false, will be updated when player starts
-  // Progress tracking
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const progressInterval = useRef<NodeJS.Timeout | null>(null);
 
-  // Refs for YouTube player
   const playerRef = useRef<any>(null);
   const playerReadyRef = useRef(false);
   const userInteractedRef = useRef(false);
-  const playOnReadyRef = useRef(false); // Flag to auto-play after ready if interaction already happened
+  const landingRef = useRef<HTMLDivElement>(null);
 
-  // Helper to open default mail client with recipient
-  const openMailTo = (subject: string, body: string) => {
-    const mailtoLink = `mailto:raphaelsarota@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.location.href = mailtoLink;
-  };
+  const particlesInit = useCallback(async (engine: Engine) => {
+    await loadSlim(engine);
+  }, []);
+
+  const particlesLoaded = useCallback(async (container: Container | undefined) => {
+    console.log("Particles loaded", container);
+  }, []);
 
   const transition = useCallback((next: Section) => {
     setFadeIn(false);
@@ -145,8 +151,22 @@ const Index = () => {
     const duration = 4000;
     const end = Date.now() + duration;
     const frame = () => {
-      confetti({ particleCount: 4, angle: 60, spread: 60, origin: { x: 0 }, colors: ["#c8913e", "#d4766b", "#e8b960", "#ffffff"] });
-      confetti({ particleCount: 4, angle: 120, spread: 60, origin: { x: 1 }, colors: ["#c8913e", "#d4766b", "#e8b960", "#ffffff"] });
+      confetti({
+        particleCount: 4,
+        angle: 60,
+        spread: 60,
+        origin: { x: 0 },
+        colors: ["#c8913e", "#d4766b", "#e8b960", "#ffffff"],
+        shapes: ["star", "circle"],
+      });
+      confetti({
+        particleCount: 4,
+        angle: 120,
+        spread: 60,
+        origin: { x: 1 },
+        colors: ["#c8913e", "#d4766b", "#e8b960", "#ffffff"],
+        shapes: ["star", "circle"],
+      });
       if (Date.now() < end) requestAnimationFrame(frame);
     };
     frame();
@@ -154,29 +174,43 @@ const Index = () => {
 
   const handleResult = (r: Result) => {
     setFadeIn(false);
-    // Store the result, but DO NOT send email yet
     setTimeout(() => {
       setResult(r);
       setSection("result");
       setFadeIn(true);
       if (r === "yes") setTimeout(fireConfetti, 400);
-      // Show expectations form after a short delay
       setTimeout(() => setShowExpectationsForm(true), 1000);
     }, 600);
   };
 
-  const handleExpectationsSubmit = (e: React.FormEvent) => {
+  const handleExpectationsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!expectations.trim() || !result) return;
 
-    // Send ONE email with both the result and expectations to the fixed recipient
-    const subject = "My Answer and Expectations for You";
-    const answerText = result === "yes" ? "YES 🎉" : "Not really 😏";
-    const body = `My answer: ${answerText}\n\nMy expectations for you:\n${expectations}`;
-    openMailTo(subject, body);
+    setIsSubmitting(true);
+    setSubmitError(null);
 
-    // Hide form and show thank you
-    setFormSubmitted(true);
+    try {
+      const response = await fetch("https://gall-backend.onrender.com/api/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          answer: result,
+          expectationsHtml: expectations,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to submit");
+      }
+
+      setFormSubmitted(true);
+    } catch (error: any) {
+      setSubmitError(error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const togglePlayPause = () => {
@@ -186,27 +220,23 @@ const Index = () => {
       } else {
         playerRef.current.playVideo();
       }
-      // isPlaying will be updated by onStateChange event
     }
   };
 
-  // Load YouTube IFrame API and create hidden player
   useEffect(() => {
-    // Load the IFrame Player API script
-    const tag = document.createElement('script');
-    tag.src = 'https://www.youtube.com/iframe_api';
-    const firstScriptTag = document.getElementsByTagName('script')[0];
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    const firstScriptTag = document.getElementsByTagName("script")[0];
     firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
 
-    // Define callback when API is ready
     window.onYouTubeIframeAPIReady = () => {
-      playerRef.current = new window.YT.Player('youtube-audio-player', {
-        height: '0',
-        width: '0',
-        videoId: '2zfTPxaX5ss', // Faouzia - Hero
+      playerRef.current = new window.YT.Player("youtube-audio-player", {
+        height: "0",
+        width: "0",
+        videoId: "2zfTPxaX5ss",
         playerVars: {
-          autoplay: 1,          // Try to autoplay (will be muted initially)
-          mute: 1,               // Start muted to satisfy browser autoplay policies
+          autoplay: 1,
+          mute: 1,
           start: 20,
           controls: 0,
           disablekb: 1,
@@ -222,13 +252,10 @@ const Index = () => {
             playerReadyRef.current = true;
             event.target.setVolume(50);
             setDuration(event.target.getDuration());
-            // If user already interacted, unmute and play
             if (userInteractedRef.current) {
               event.target.unMute();
               event.target.playVideo();
             } else {
-              // Otherwise it's already playing muted, we'll unmute on first interaction
-              // Ensure it's playing muted
               event.target.playVideo();
             }
           },
@@ -245,7 +272,6 @@ const Index = () => {
       });
     };
 
-    // Cleanup
     return () => {
       window.onYouTubeIframeAPIReady = null;
       if (playerRef.current && playerRef.current.destroy) {
@@ -254,28 +280,26 @@ const Index = () => {
     };
   }, []);
 
-  // Unmute and play on first user interaction
   useEffect(() => {
     const handleFirstInteraction = () => {
       if (!userInteractedRef.current) {
         userInteractedRef.current = true;
         if (playerRef.current && playerReadyRef.current) {
           playerRef.current.unMute();
-          playerRef.current.playVideo(); // Ensure it's playing
+          playerRef.current.playVideo();
         }
       }
     };
 
-    window.addEventListener('click', handleFirstInteraction, { once: true });
-    window.addEventListener('touchstart', handleFirstInteraction, { once: true });
+    window.addEventListener("click", handleFirstInteraction, { once: true });
+    window.addEventListener("touchstart", handleFirstInteraction, { once: true });
 
     return () => {
-      window.removeEventListener('click', handleFirstInteraction);
-      window.removeEventListener('touchstart', handleFirstInteraction);
+      window.removeEventListener("click", handleFirstInteraction);
+      window.removeEventListener("touchstart", handleFirstInteraction);
     };
   }, []);
 
-  // Progress tracking
   useEffect(() => {
     if (isPlaying && playerRef.current && playerReadyRef.current) {
       progressInterval.current = setInterval(() => {
@@ -314,194 +338,299 @@ const Index = () => {
     }
   }, [section]);
 
-  const sectionClass = `min-h-screen flex items-center justify-center px-6 py-16 transition-all duration-700 ${fadeIn ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`;
+  const sectionClass = `min-h-screen flex items-center justify-center px-6 py-16 transition-all duration-1000 ease-out-expo ${
+    fadeIn ? "opacity-100 translate-y-0" : "opacity-0 translate-y-12"
+  }`;
 
-  // Format time as mm:ss
   const formatTime = (seconds: number) => {
     if (isNaN(seconds)) return "0:00";
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
   const progress = duration ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div className="cinematic-bg min-h-screen relative overflow-hidden">
-      <FloatingHearts />
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#0a0a0a] via-[#1a1a2e] to-[#16213e]">
+      {/* Particle Background */}
+      <Particles
+        id="tsparticles"
+        init={particlesInit}
+        loaded={particlesLoaded}
+        className="absolute inset-0 -z-10"
+        options={{
+          background: { color: { value: "transparent" } },
+          fpsLimit: 60,
+          particles: {
+            color: { value: ["#c8913e", "#d4766b", "#e8b960", "#ffffff"] },
+            links: { enable: false },
+            move: {
+              enable: true,
+              direction: "none",
+              random: true,
+              speed: 0.5,
+              straight: false,
+            },
+            number: { density: { enable: true, area: 800 }, value: 80 },
+            opacity: { value: 0.3, random: true },
+            shape: { type: ["circle", "heart"] },
+            size: { value: { min: 1, max: 3 }, random: true },
+          },
+          detectRetina: true,
+        }}
+      />
 
-      {/* Hidden YouTube Audio Player */}
-      <div id="youtube-audio-player" style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }} />
+      {/* Hidden YouTube Player */}
+      <div
+        id="youtube-audio-player"
+        style={{ position: "absolute", width: 0, height: 0, opacity: 0, pointerEvents: "none" }}
+      />
 
-      {/* Spinning Compact Disc with Progress Ring */}
-      <div className="fixed  top-4 left-4 z-50 flex-col items-center">
-        {/* Container for disc and ring */}
-        <div className="relative w-16 h-16">
-          {/* Progress ring background (grey) */}
-          <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100">
-            <circle
-              cx="50"
-              cy="50"
-              r="46"
-              fill="none"
-              stroke="#4a4a4a"
-              strokeWidth="4"
-              opacity="0.3"
-            />
-            {/* Progress ring */}
-            <circle
-              cx="50"
-              cy="50"
-              r="46"
-              fill="none"
-              stroke="#c8913e"
-              strokeWidth="4"
-              strokeLinecap="round"
-              strokeDasharray="289.03" // 2 * pi * 46 ≈ 289.03
-              strokeDashoffset={289.03 * (1 - (progress || 0) / 100)}
-              style={{ transition: 'stroke-dashoffset 0.2s' }}
-              transform="rotate(-90 50 50)" // Start from top
-            />
-          </svg>
-          {/* CD Button */}
-          <button
-            onClick={togglePlayPause}
-            className="absolute inset-0 w-full h-full rounded-full focus:outline-none transition-transform hover:scale-105"
-            aria-label={isPlaying ? "Pause music" : "Play music"}
-          >
-            <div
-              className={`w-full h-full rounded-full bg-gradient-to-r from-gray-300 via-pink-500 to-gray-300 shadow-lg flex items-center justify-center border-2 border-gray-400 ${
-                isPlaying ? "animate-spin" : ""
-              }`}
-              style={{ animationDuration: "4s" }}
+      {/* Modern Music Player */}
+      <div className="fixed top-6 left-6 z-50 group">
+        <div className="relative flex items-center space-x-3">
+          <div className="relative w-14 h-14">
+            <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
+              <circle
+                cx="50"
+                cy="50"
+                r="46"
+                fill="none"
+                stroke="rgba(255,255,255,0.1)"
+                strokeWidth="4"
+              />
+              <circle
+                cx="50"
+                cy="50"
+                r="46"
+                fill="none"
+                stroke="url(#gradient)"
+                strokeWidth="4"
+                strokeLinecap="round"
+                strokeDasharray="289.03"
+                strokeDashoffset={289.03 * (1 - progress / 100)}
+                style={{ transition: "stroke-dashoffset 0.2s" }}
+              />
+              <defs>
+                <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#c8913e" />
+                  <stop offset="100%" stopColor="#d4766b" />
+                </linearGradient>
+              </defs>
+            </svg>
+            <button
+              onClick={togglePlayPause}
+              className="absolute inset-0 flex items-center justify-center w-full h-full rounded-full bg-gradient-to-br from-amber-400/20 to-rose-400/20 backdrop-blur-md border border-white/20 shadow-2xl transition-all duration-300 hover:scale-110 hover:border-white/40 group"
             >
-              <div className="w-4 h-4 rounded-full bg-gray-500 border-2 border-gray-600">
-               <span className="">click to play</span> 
+              <div
+                className={`w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-rose-500 flex items-center justify-center shadow-lg ${
+                  isPlaying ? "animate-spin-slow" : ""
+                }`}
+              >
+                {isPlaying ? (
+                  <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                )}
               </div>
-            </div>
-          </button>
-        </div>
-        {/* Time display */}
-        <div className="mt-1 text-xs text-white/80 font-mono bg-black/30 px-2 py-0.5 rounded-full backdrop-blur-sm">
-          {formatTime(currentTime)} / {formatTime(duration)}
+            </button>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-xs font-mono text-white/70 bg-black/30 px-2 py-1 rounded-full backdrop-blur-sm">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </span>
+            <span className="text-xs text-white/50 mt-1">Hero – Faouzia</span>
+          </div>
         </div>
       </div>
 
-      {/* LANDING — Poem */}
+      {/* Main Content */}
       {section === "landing" && (
-        <div className={sectionClass}>
-          <div className="max-w-2xl w-full text-center space-y-10">
-            <div className="space-y-3">
-              <p className="text-primary text-sm tracking-[0.3em] uppercase font-medium">A letter for Sagina</p>
-              <h1 className="text-4xl md:text-6xl lg:text-7xl font-display font-light text-foreground leading-[1.15] tracking-wide">
-                You Changed <span className="text-gradient-gold italic">Everything</span>
+        <div ref={landingRef} className={sectionClass}>
+          <div className="max-w-3xl w-full text-center space-y-12">
+            <div className="space-y-4">
+              <span className="inline-block px-3 py-1 text-xs tracking-[0.3em] uppercase bg-white/5 backdrop-blur-md rounded-full text-amber-300 border border-white/10">
+                A letter for Sagina
+              </span>
+              <h1 className="text-5xl md:text-7xl lg:text-8xl font-display font-light text-white leading-[1.1] tracking-wide">
+                You Changed{" "}
+                <span className="bg-gradient-to-r from-amber-300 via-rose-300 to-amber-300 bg-clip-text text-transparent italic animate-gradient">
+                  Everything
+                </span>
               </h1>
             </div>
-            <div className="divider-gold" />
-            <div className="glass-card p-8 md:p-10 text-left">
+            <div className="w-24 h-px mx-auto bg-gradient-to-r from-transparent via-amber-400/50 to-transparent" />
+            <div className="glass-card-strong p-8 md:p-12 text-left rounded-3xl border border-white/10 shadow-2xl">
               <TypewriterText
                 text={poem}
                 speed={30}
                 onComplete={() => setPoemDone(true)}
-                className="text-foreground/70 leading-[2] text-base md:text-lg font-light"
+                className="text-white/80 leading-[2] text-base md:text-lg font-light"
               />
             </div>
             {poemDone && (
               <button
                 onClick={() => transition("letters")}
-                className="glow-button animate-pulse-glow"
+                className="group relative px-8 py-4 rounded-full bg-gradient-to-r from-amber-500 to-rose-500 text-white font-medium overflow-hidden transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-amber-500/25"
               >
-                Click Here ❤️
+                <span className="relative z-10 flex items-center space-x-2">
+                  <span>Click Here</span>
+                  <span className="text-2xl group-hover:animate-pulse">❤️</span>
+                </span>
+                <div className="absolute inset-0 bg-gradient-to-r from-amber-600 to-rose-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               </button>
             )}
           </div>
         </div>
       )}
 
-      {/* LOVE LETTERS */}
       {section === "letters" && (
         <div className={sectionClass}>
-          <div className="max-w-2xl w-full text-center space-y-8">
+          <div className="max-w-2xl w-full text-center space-y-10">
             <div className="space-y-3">
-              <p className="text-primary text-sm tracking-[0.3em] uppercase font-medium">Unsent letters</p>
-              <h2 className="text-3xl md:text-5xl font-display font-light text-foreground tracking-wide">
-                Things I Never <span className="italic text-gradient-gold">Said</span>
+              <span className="inline-block px-3 py-1 text-xs tracking-[0.3em] uppercase bg-white/5 backdrop-blur-md rounded-full text-amber-300 border border-white/10">
+                Unsent letters
+              </span>
+              <h2 className="text-4xl md:text-6xl font-display font-light text-white tracking-wide">
+                Things I Never{" "}
+                <span className="bg-gradient-to-r from-amber-300 to-rose-300 bg-clip-text text-transparent italic">
+                  Said
+                </span>
               </h2>
-              <p className="text-muted-foreground text-sm tracking-wide mt-2">Open each one. They've been waiting for you.</p>
-              <p className="text-muted-foreground text-sm tracking-wide mt-2">I wrote each of them after tumetoka out.</p>
+              <p className="text-white/50 text-sm tracking-wide mt-2">
+                Open each one. They've been waiting for you.
+              </p>
             </div>
-            <div className="divider-gold" />
+            <div className="w-24 h-px mx-auto bg-gradient-to-r from-transparent via-amber-400/50 to-transparent" />
             <div className="space-y-4">
               {loveLetters.map((letter, i) => (
-                <LoveLetter key={i} label={letter.label} message={letter.message} number={i + 1} />
+                <LoveLetter
+                  key={i}
+                  label={letter.label}
+                  message={letter.message}
+                  number={i + 1}
+                />
               ))}
             </div>
-            <button onClick={() => transition("promises")} className="glow-button mt-4">
-              Keep Going ✦
+            <button
+              onClick={() => transition("promises")}
+              className="group relative px-8 py-4 rounded-full bg-white/5 backdrop-blur-md border border-white/10 text-white font-medium overflow-hidden transition-all duration-300 hover:bg-white/10 hover:border-amber-400/50"
+            >
+              <span className="relative z-10 flex items-center space-x-2">
+                <span>Keep Going</span>
+                <span className="group-hover:translate-x-1 transition-transform">✦</span>
+              </span>
             </button>
           </div>
         </div>
       )}
 
-      {/* PROMISES */}
       {section === "promises" && (
         <div className={sectionClass}>
-          <div className="max-w-2xl w-full text-center space-y-8">
+          <div className="max-w-2xl w-full text-center space-y-10">
             <div className="space-y-3">
-              <p className="text-primary text-sm tracking-[0.3em] uppercase font-medium">My promises to you</p>
-              <h2 className="text-3xl md:text-5xl font-display font-light text-foreground tracking-wide leading-snug">
-                If You Let Me <span className="italic text-gradient-gold">Stay</span>
+              <span className="inline-block px-3 py-1 text-xs tracking-[0.3em] uppercase bg-white/5 backdrop-blur-md rounded-full text-amber-300 border border-white/10">
+                My promises to you
+              </span>
+              <h2 className="text-4xl md:text-6xl font-display font-light text-white tracking-wide leading-snug">
+                If You Let Me{" "}
+                <span className="bg-gradient-to-r from-amber-300 to-rose-300 bg-clip-text text-transparent italic">
+                  Stay
+                </span>
               </h2>
-              <p className="text-muted-foreground text-sm tracking-wide mt-2">These aren't just words, Sagina. These are commitments.</p>
+              <p className="text-white/50 text-sm tracking-wide mt-2">
+                These aren't just words, Sagina. These are commitments.
+              </p>
             </div>
-            <div className="divider-gold" />
-            <div className="space-y-3 text-left">
+            <div className="w-24 h-px mx-auto bg-gradient-to-r from-transparent via-amber-400/50 to-transparent" />
+            <div className="space-y-3 text-left max-w-lg mx-auto">
               {promises.map((promise, i) => (
                 <div
                   key={i}
-                  className={`promise-item transition-all duration-700 ${i < visiblePromises ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}
+                  className={`promise-item-modern transition-all duration-700 ${
+                    i < visiblePromises
+                      ? "opacity-100 translate-x-0"
+                      : "opacity-0 -translate-x-4"
+                  }`}
                 >
-                  <span className="text-primary font-display text-2xl leading-none mt-0.5">✦</span>
-                  <p className="text-foreground/80 font-light leading-relaxed">{promise}</p>
+                  <div className="flex items-start space-x-4 p-4 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 hover:border-amber-400/30 hover:bg-white/10 transition-all group">
+                    <span className="text-amber-400 text-2xl leading-none mt-0.5 group-hover:rotate-12 transition-transform">
+                      ✦
+                    </span>
+                    <p className="text-white/80 font-light leading-relaxed">{promise}</p>
+                  </div>
                 </div>
               ))}
             </div>
             {showPromiseContinue && (
               <button
                 onClick={() => transition("final")}
-                className="glow-button animate-pulse-glow"
+                className="group relative px-8 py-4 rounded-full bg-gradient-to-r from-amber-500 to-rose-500 text-white font-medium overflow-hidden transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-amber-500/25"
               >
-                One Last Thing ❤️
+                <span className="relative z-10 flex items-center space-x-2">
+                  <span>One Last Thing</span>
+                  <span className="text-2xl group-hover:animate-pulse">❤️</span>
+                </span>
+                <div className="absolute inset-0 bg-gradient-to-r from-amber-600 to-rose-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               </button>
             )}
           </div>
         </div>
       )}
 
-      {/* FINAL QUESTION */}
       {section === "final" && (
         <div className={`${sectionClass} final-bg`}>
-          <div className="max-w-2xl w-full text-center space-y-10">
-            <div className="glass-card p-8 md:p-10 space-y-6">
-              <p className="text-lg text-foreground/70 font-light leading-[1.9]">
-                Sagina, I love you. You know it, and it’s true.
+          <div className="max-w-2xl w-full text-center space-y-12">
+            <div className="glass-card-strong p-10 md:p-14 space-y-6 rounded-3xl border border-white/10 shadow-2xl">
+              <p className="text-xl text-white/80 font-light leading-[1.9]">
+                Sagina, I love you. You know it, and it's true.
               </p>
-              <p className="text-lg text-foreground/70 font-light leading-[1.9]">
-                Being with you makes every moment brighter, every laugh sweeter, every day feel lighter.
-                I fall for you every time I see your smile, every time we talk, every time you just exist.
+              <p className="text-xl text-white/80 font-light leading-[1.9]">
+                Being with you makes every moment brighter, every laugh sweeter, every day feel
+                lighter. I fall for you every time I see your smile, every time we talk, every
+                time you just exist.
               </p>
-              <p className="text-lg text-foreground/70 font-light leading-[1.9]">
-                I promise to cherish you, to be there through everything, and to love you with my whole heart.
+              <p className="text-xl text-white/80 font-light leading-[1.9]">
+                I promise to cherish you, to be there through everything, and to love you with my
+                whole heart.
               </p>
             </div>
             {showFinalQuestion && (
-              <div className="space-y-8 animate-[celebration_0.8s_ease-out]">
-                <h2 className="text-4xl md:text-6xl lg:text-7xl font-display font-light text-foreground tracking-wide leading-[1.2]">
-                  Sagina, will you be my <span className="italic text-gradient-gold">girlfriend?</span>
+              <div className="space-y-8 animate-fade-up">
+                <h2 className="text-5xl md:text-7xl lg:text-8xl font-display font-light text-white tracking-wide leading-[1.2]">
+                  Sagina, will you be my{" "}
+                  <span className="relative inline-block">
+                    <span className="bg-gradient-to-r from-amber-300 to-rose-300 bg-clip-text text-transparent italic">
+                      girlfriend?
+                    </span>
+                    <span className="absolute -bottom-2 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-rose-400 rounded-full animate-pulse" />
+                  </span>
                 </h2>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center flex-wrap">
-                  <button onClick={() => handleResult("yes")} className="glow-button text-base">Yes 🥺❤️</button>
-                  <button onClick={() => handleResult("No really")} className="option-button">Not Really 😌</button>
+                <div className="flex flex-col sm:flex-row gap-6 justify-center flex-wrap">
+                  <button
+                    onClick={() => handleResult("yes")}
+                    className="group relative px-10 py-5 rounded-full bg-gradient-to-r from-amber-500 to-rose-500 text-white text-lg font-medium overflow-hidden transition-all duration-300 hover:scale-110 hover:shadow-2xl hover:shadow-amber-500/25"
+                  >
+                    <span className="relative z-10 flex items-center space-x-3">
+                      <span>Yes</span>
+                      <span className="text-2xl">🥺❤️</span>
+                    </span>
+                    <div className="absolute inset-0 bg-gradient-to-r from-amber-600 to-rose-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  </button>
+                  <button
+                    onClick={() => handleResult("No really")}
+                    className="group relative px-10 py-5 rounded-full bg-white/5 backdrop-blur-md border border-white/10 text-white text-lg font-medium overflow-hidden transition-all duration-300 hover:bg-white/10 hover:border-rose-400/50"
+                  >
+                    <span className="relative z-10 flex items-center space-x-3">
+                      <span>Not Really</span>
+                      <span className="text-2xl">😌</span>
+                    </span>
+                  </button>
                 </div>
               </div>
             )}
@@ -509,72 +638,98 @@ const Index = () => {
         </div>
       )}
 
-      {/* RESULT with combined Expectations Form */}
       {section === "result" && (
         <div className={`${sectionClass} ${result === "yes" ? "final-bg" : ""}`}>
-          <div className="max-w-2xl w-full text-center space-y-8 animate-celebration">
+          <div className="max-w-2xl w-full text-center space-y-10 animate-celebration">
             {result === "yes" && (
               <>
-                <div className="text-7xl md:text-9xl">🥹</div>
-                <h2 className="text-4xl md:text-6xl font-display font-light text-foreground tracking-wide leading-tight">
-                  You just made me the <span className="italic text-gradient-gold">happiest</span> man alive.
+                <div className="text-8xl md:text-9xl animate-bounce">🥹</div>
+                <h2 className="text-5xl md:text-7xl font-display font-light text-white tracking-wide leading-tight">
+                  You just made me the{" "}
+                  <span className="bg-gradient-to-r from-amber-300 to-rose-300 bg-clip-text text-transparent italic">
+                    happiest
+                  </span>{" "}
+                  man alive.
                 </h2>
-                <p className="text-xl text-muted-foreground font-light tracking-wide">
+                <p className="text-2xl text-white/60 font-light tracking-wide">
                   I'll love you more every second my patootie.
                 </p>
               </>
             )}
             {result === "No really" && (
               <>
-                <div className="text-7xl md:text-9xl">😀</div>
-                <h2 className="text-3xl md:text-5xl font-display font-light text-foreground tracking-wide leading-tight">
-                  Decision  <span className="italic text-gradient-gold">respected</span>
+                <div className="text-8xl md:text-9xl animate-pulse">😀</div>
+                <h2 className="text-5xl md:text-7xl font-display font-light text-white tracking-wide leading-tight">
+                  Decision{" "}
+                  <span className="bg-gradient-to-r from-amber-300 to-rose-300 bg-clip-text text-transparent italic">
+                    respected
+                  </span>
                 </h2>
-                <p className="text-xl text-muted-foreground font-light tracking-wide">
-                  Anaku rahisi
-                </p>
+                <p className="text-2xl text-white/60 font-light tracking-wide">Anaku rahisi</p>
               </>
             )}
 
-            {/* Expectations Form (only shown before submission) */}
             {showExpectationsForm && !formSubmitted && (
-              <div className="mt-12 glass-card p-6 md:p-8 max-w-lg mx-auto">
-                <h3 className="text-2xl font-display font-light text-foreground mb-4">
+              <div className="mt-16 glass-card-strong p-8 md:p-10 max-w-lg mx-auto rounded-3xl border border-white/10 shadow-2xl">
+                <h3 className="text-3xl font-display font-light text-white mb-4">
                   What do you expect from me?
                 </h3>
-                <p className="text-muted-foreground text-sm mb-6">
-                  Share your heart ... I'm listening. (Clicking submit will open your email client with your answer and expectations.)
+                <p className="text-white/60 text-sm mb-6">
+                  Share your heart ... I'm listening.
                 </p>
-                <form onSubmit={handleExpectationsSubmit} className="space-y-4">
-                  <textarea
+                <form onSubmit={handleExpectationsSubmit} className="space-y-5">
+                  <ReactQuill
+                    theme="snow"
                     value={expectations}
-                    onChange={(e) => setExpectations(e.target.value)}
+                    onChange={setExpectations}
                     placeholder="e.g., I need honesty, quality time, adventure, peace..."
-                    rows={4}
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-                    required
+                    modules={{
+                      toolbar: [
+                        ["bold", "italic", "underline"],
+                        [{ list: "ordered" }, { list: "bullet" }],
+                        ["clean"],
+                      ],
+                    }}
+                    className="bg-white/5 text-white rounded-lg [&_.ql-toolbar]:bg-white/10 [&_.ql-toolbar]:border-white/20 [&_.ql-container]:border-white/20 [&_.ql-editor]:text-white [&_.ql-editor]:min-h-[120px]"
                   />
+                  {submitError && <p className="text-rose-400 text-sm">{submitError}</p>}
                   <button
                     type="submit"
-                    className="glow-button w-full justify-center"
+                    disabled={isSubmitting}
+                    className="w-full px-6 py-4 rounded-full bg-gradient-to-r from-amber-500 to-rose-500 text-white font-medium transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-amber-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Click here to submit ✨
+                    {isSubmitting ? "Submitting..." : "Click here to submit ✨"}
                   </button>
                 </form>
               </div>
             )}
 
             {formSubmitted && (
-              <div className="mt-12 glass-card p-6 md:p-8 max-w-lg mx-auto animate-fade-in">
-                <div className="text-5xl mb-4">💌</div>
-                <h3 className="text-2xl font-display font-light text-foreground mb-2">
+              <div className="mt-16 glass-card-strong p-8 md:p-10 max-w-lg mx-auto rounded-3xl border border-white/10 shadow-2xl animate-fade-in">
+                <div className="text-6xl mb-4 animate-float">💌</div>
+                <h3 className="text-3xl font-display font-light text-white mb-2">
                   Thank you for trusting me
                 </h3>
-                <p className="text-muted-foreground">
-                  Your email client should open — please send it so I can read your answer and expectations.
+                <p className="text-white/60">
+                  Your response has been saved. I'll read it with all my heart.
                 </p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Full-screen loader */}
+      {isSubmitting && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-xl">
+          <div className="flex flex-col items-center space-y-6">
+            <div className="relative">
+              <div className="w-20 h-20 border-4 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-3xl animate-pulse">❤️</span>
+              </div>
+            </div>
+            <p className="text-white text-xl font-light tracking-wide">Submitting your response...</p>
           </div>
         </div>
       )}
