@@ -334,7 +334,7 @@ const Index = () => {
       <div id="youtube-audio-player" style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }} />
 
       {/* Spinning Compact Disc with Progress Ring */}
-      <div className="fixed hidden bottom-4 left-4 z-50 flex-col items-center">
+      <div className="fixed  top-4 left-4 z-50 flex-col items-center">
         {/* Container for disc and ring */}
         <div className="relative w-16 h-16">
           {/* Progress ring background (grey) */}
@@ -370,7 +370,7 @@ const Index = () => {
             aria-label={isPlaying ? "Pause music" : "Play music"}
           >
             <div
-              className={`w-full h-full rounded-full bg-gradient-to-r from-gray-300 via-gray-100 to-gray-300 shadow-lg flex items-center justify-center border-2 border-gray-400 ${
+              className={`w-full h-full rounded-full bg-gradient-to-r from-gray-300 via-pink-500 to-gray-300 shadow-lg flex items-center justify-center border-2 border-gray-400 ${
                 isPlaying ? "animate-spin" : ""
               }`}
               style={{ animationDuration: "4s" }}
