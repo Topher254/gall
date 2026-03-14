@@ -375,7 +375,9 @@ const Index = () => {
               }`}
               style={{ animationDuration: "4s" }}
             >
-              <div className="w-4 h-4 rounded-full bg-gray-500 border-2 border-gray-600"></div>
+              <div className="w-4 h-4 rounded-full bg-gray-500 border-2 border-gray-600">
+               <span className="">click to play</span> 
+              </div>
             </div>
           </button>
         </div>
